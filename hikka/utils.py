@@ -728,7 +728,6 @@ async def asset_channel(
     invite_bot: bool = False,
     avatar: typing.Optional[str] = None,
     ttl: typing.Optional[int] = None,
-    forum: bool = False,
     _folder: typing.Optional[str] = None,
 ) -> typing.Tuple[Channel, bool]:
     """
@@ -742,7 +741,6 @@ async def asset_channel(
     :param invite_bot: Add inline bot and assure it's in chat
     :param avatar: Url to an avatar to set as pfp of created peer
     :param ttl: Time to live for messages in channel
-    :param forum: Whether to create a forum channel
     :return: Peer and bool: is channel new or pre-existent
     """
     if not hasattr(client, "_channels_cache"):
@@ -777,7 +775,6 @@ async def asset_channel(
                 title,
                 description,
                 megagroup=not channel,
-                forum=forum,
             )
         )
     ).chats[0]
@@ -923,10 +920,7 @@ def get_named_platform() -> str:
     if main.IS_CODESPACES:
         return "🐈‍⬛ Codespaces"
 
-    if main.IS_HIKKAHOST:
-        return "ToThosT"
-
-    return f"\U0001F346 ToThosT {os.environ['LAVHOST']}" if main.IS_LAVHOST else "\U0001F346 ToThosT"
+    return f"✌️ lavHost {os.environ['LAVHOST']}" if main.IS_LAVHOST else "🍆ToThosT"
 
 
 def get_platform_emoji() -> str:
@@ -961,9 +955,6 @@ def get_platform_emoji() -> str:
 
     if main.IS_RAILWAY:
         return BASE.format(5199607521593007466)
-
-    if main.IS_HIKKAHOST:
-        return BASE.format(5370731117588523522)
 
     return BASE.format(5192765204898783881)
 
