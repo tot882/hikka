@@ -942,7 +942,7 @@ def get_platform_emoji() -> str:
         return BASE.format(5298554256603752468)
 
     if main.IS_LAVHOST:
-        return BASE.format(5301078610747074753)
+        return BASE.format(5170150664487043960)
 
     if main.IS_GOORM:
         return BASE.format(5298947740032573902)
