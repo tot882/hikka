@@ -728,6 +728,7 @@ async def asset_channel(
     invite_bot: bool = False,
     avatar: typing.Optional[str] = None,
     ttl: typing.Optional[int] = None,
+    forum: bool = False,
     _folder: typing.Optional[str] = None,
 ) -> typing.Tuple[Channel, bool]:
     """
@@ -741,6 +742,7 @@ async def asset_channel(
     :param invite_bot: Add inline bot and assure it's in chat
     :param avatar: Url to an avatar to set as pfp of created peer
     :param ttl: Time to live for messages in channel
+    :param forum: Whether to create a forum channel
     :return: Peer and bool: is channel new or pre-existent
     """
     if not hasattr(client, "_channels_cache"):
@@ -775,6 +777,7 @@ async def asset_channel(
                 title,
                 description,
                 megagroup=not channel,
+                forum=forum,
             )
         )
     ).chats[0]
@@ -903,24 +906,27 @@ def get_named_platform() -> str:
                 return f"🍇 {model}" if "Raspberry" in model else f"❓ {model}"
 
     if main.IS_WSL:
-        return "<emoji document_id=5253874021061118203></emoji><emoji document_id=5255971528469662704></emoji><emoji document_id=5255982609485283509></emoji><emoji document_id=5253803983029422224>🍆ToThosT</emoji>"
+        return "🍀 WSL"
 
     if main.IS_GOORM:
-        return "<emoji document_id=5253874021061118203></emoji><emoji document_id=5255971528469662704></emoji><emoji document_id=5255982609485283509></emoji><emoji document_id=5253803983029422224>🍆ToThosT</emoji>"
+        return "🦾 GoormIDE"
 
     if main.IS_RAILWAY:
-        return "<emoji document_id=5253874021061118203></emoji><emoji document_id=5255971528469662704></emoji><emoji document_id=5255982609485283509></emoji><emoji document_id=5253803983029422224>🍆ToThosT</emoji>"
+        return "🚂 Railway"
 
     if main.IS_DOCKER:
-        return "<emoji document_id=5253874021061118203></emoji><emoji document_id=5255971528469662704></emoji><emoji document_id=5255982609485283509></emoji><emoji document_id=5253803983029422224>🍆ToThosT</emoji>"
+        return "🐳 Docker"
 
     if main.IS_TERMUX:
-        return "<emoji document_id=5253874021061118203></emoji><emoji document_id=5255971528469662704></emoji><emoji document_id=5255982609485283509></emoji><emoji document_id=5253803983029422224>🍆ToThosT</emoji>"
+        return "🕶 Termux"
 
     if main.IS_CODESPACES:
-        return "<emoji document_id=5253874021061118203></emoji><emoji document_id=5255971528469662704></emoji><emoji document_id=5255982609485283509></emoji><emoji document_id=5253803983029422224>🍆ToThosT</emoji>"
+        return "🐈‍⬛ Codespaces"
 
-    return f"✌️ lavHost {os.environ['LAVHOST']}" if main.IS_LAVHOST else "<emoji document_id=5253874021061118203></emoji><emoji document_id=5255971528469662704></emoji><emoji document_id=5255982609485283509></emoji><emoji document_id=5253803983029422224>🍆ToThosT</emoji>"
+    if main.IS_HIKKAHOST:
+        return "WhoHost"
+
+    return f"✌️ lavHost {os.environ['LAVHOST']}" if main.IS_LAVHOST else "<emoji document_id=5253874021061118203></emoji><emoji document_id=5255971528469662704></emoji><emoji document_id=5255982609485283509></emoji><emoji document_id=5253803983029422224>🍆 ToThosT</emoji>"
 
 
 def get_platform_emoji() -> str:
@@ -955,6 +961,9 @@ def get_platform_emoji() -> str:
 
     if main.IS_RAILWAY:
         return BASE.format(5199607521593007466)
+
+    if main.IS_HIKKAHOST:
+        return BASE.format(5370731117588523522)
 
     return BASE.format(5192765204898783881)
 
