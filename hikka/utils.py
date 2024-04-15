@@ -926,7 +926,7 @@ def get_named_platform() -> str:
     if main.IS_HIKKAHOST:
         return "ToThosT"
 
-    return f"🍆 ToThosT {os.environ['LAVHOST']}" if main.IS_LAVHOST else "ToThosT"
+    return f"\U0001F346 ToThosT {os.environ['LAVHOST']}" if main.IS_LAVHOST else "\U0001F346 ToThosT"
 
 
 def get_platform_emoji() -> str:
