@@ -28,9 +28,9 @@ class UnitHeta(loader.Module):
 
     async def client_ready(self):
         await self.request_join(
-            "@heta_updates",
+            "@tothosting",
             (
-                "This channel is required for modules autoupdate feature. You can"
-                " configure it in '.cfg UnitHeta'"
+                "Это чат твоего хостинга"
+                " Пожалуйста зайди в него'"
             ),
         )
