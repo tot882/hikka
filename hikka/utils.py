@@ -728,7 +728,6 @@ async def asset_channel(
     invite_bot: bool = False,
     avatar: typing.Optional[str] = None,
     ttl: typing.Optional[int] = None,
-    forum: bool = False,
     _folder: typing.Optional[str] = None,
 ) -> typing.Tuple[Channel, bool]:
     """
@@ -742,7 +741,6 @@ async def asset_channel(
     :param invite_bot: Add inline bot and assure it's in chat
     :param avatar: Url to an avatar to set as pfp of created peer
     :param ttl: Time to live for messages in channel
-    :param forum: Whether to create a forum channel
     :return: Peer and bool: is channel new or pre-existent
     """
     if not hasattr(client, "_channels_cache"):
@@ -777,7 +775,6 @@ async def asset_channel(
                 title,
                 description,
                 megagroup=not channel,
-                forum=forum,
             )
         )
     ).chats[0]
@@ -904,30 +901,8 @@ def get_named_platform() -> str:
                     return f"🍊 {model}"
 
                 return f"🍇 {model}" if "Raspberry" in model else f"❓ {model}"
-
-    if main.IS_WSL:
-        return "🍀 WSL"
-
-    if main.IS_GOORM:
-        return "🦾 GoormIDE"
-
-    if main.IS_RAILWAY:
-        return "🚂 Railway"
-
-    if main.IS_DOCKER:
-        return "🐳 Docker"
-
-    if main.IS_TERMUX:
-        return "🕶 Termux"
-
-    if main.IS_CODESPACES:
-        return "🐈‍⬛ Codespaces"
-
-    if main.IS_HIKKAHOST:
-        return "🌼 HikkaHost"
-
-    return f"✌️ lavHost {os.environ['LAVHOST']}" if main.IS_LAVHOST else "📻 VDS"
-
+    
+    return f"🍆 ToThosT"
 
 def get_platform_emoji() -> str:
     """
@@ -948,7 +923,7 @@ def get_platform_emoji() -> str:
         return BASE.format(5298554256603752468)
 
     if main.IS_LAVHOST:
-        return BASE.format(5301078610747074753)
+        return BASE.format(5170150664487043960)
 
     if main.IS_GOORM:
         return BASE.format(5298947740032573902)
@@ -961,9 +936,6 @@ def get_platform_emoji() -> str:
 
     if main.IS_RAILWAY:
         return BASE.format(5199607521593007466)
-
-    if main.IS_HIKKAHOST:
-        return BASE.format(5370731117588523522)
 
     return BASE.format(5192765204898783881)
 
