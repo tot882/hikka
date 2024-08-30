@@ -62,7 +62,7 @@ class HikkaInfoMod(loader.Module):
         platform = utils.get_named_platform()
 
         for emoji, icon in [
-            ("🍆", "<emoji document_id=5253874021061118203>🍆</emoji>")
+            ("🍆", "<emoji document_id=5346156903858710186>🍆</emoji>")
         ]:
             platform = platform.replace(emoji, icon)
 
