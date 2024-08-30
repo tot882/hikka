@@ -902,8 +902,7 @@ def get_named_platform() -> str:
 
                 return f"🍇 {model}" if "Raspberry" in model else f"❓ {model}"
     
-    return f"🍆 ToThosT" if main. else "<emoji document_id=5253874021061118203>🍆</emoji><emoji document_id=5255971528469662704>🍆</emoji><emoji document_id=5255982609485283509>🍆</emoji><emoji document_id=5253803983029422224>🍆</emoji>"
-
+    return f"🍆 ToThosT"
 
 def get_platform_emoji() -> str:
     """
