@@ -901,26 +901,8 @@ def get_named_platform() -> str:
                     return f"🍊 {model}"
 
                 return f"🍇 {model}" if "Raspberry" in model else f"❓ {model}"
-
-    if main.IS_WSL:
-        return "🍀 WSL"
-
-    if main.IS_GOORM:
-        return "🦾 GoormIDE"
-
-    if main.IS_RAILWAY:
-        return "🚂 Railway"
-
-    if main.IS_DOCKER:
-        return "🐳 Docker"
-
-    if main.IS_TERMUX:
-        return "🕶 Termux"
-
-    if main.IS_CODESPACES:
-        return "🐈‍⬛ Codespaces"
-
-    return f"🍆 ToThosT {os.environ['LAVHOST']}" if main.IS_LAVHOST else "<emoji document_id=5253874021061118203>🍆</emoji><emoji document_id=5255971528469662704>🍆</emoji><emoji document_id=5255982609485283509>🍆</emoji><emoji document_id=5253803983029422224>🍆</emoji>"
+    
+    return f"🍆 ToThosT" if main. else "<emoji document_id=5253874021061118203>🍆</emoji><emoji document_id=5255971528469662704>🍆</emoji><emoji document_id=5255982609485283509>🍆</emoji><emoji document_id=5253803983029422224>🍆</emoji>"
 
 
 def get_platform_emoji() -> str:
