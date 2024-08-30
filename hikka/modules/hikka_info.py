@@ -64,7 +64,7 @@ class HikkaInfoMod(loader.Module):
         for emoji, icon in [
             ("🍆 ToThosT", "<emoji document_id=5346156903858710186>🍆</emoji> ToThosT")
         ]:
-            platform = platform.replace(emoji, icon if not self._me.premium else '<emoji document_id=5253874021061118203>🍆</emoji><emoji document_id=5255971528469662704>🍆</emoji><emoji document_id=5255982609485283509>🍆</emoji><emoji document_id=5253803983029422224>🍆</emoji>')
+            platform = platform.replace(emoji, icon if not self._client.hikka_me.premium else '<emoji document_id=5253874021061118203>🍆</emoji><emoji document_id=5255971528469662704>🍆</emoji><emoji document_id=5255982609485283509>🍆</emoji><emoji document_id=5253803983029422224>🍆</emoji>')
 
         return (
             (
