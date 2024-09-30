@@ -21,7 +21,7 @@ from ..version import __version__
 logger = logging.getLogger(__name__)
 
 @loader.tds
-class UnitHeta(loader.Module):
+class ToThosT(loader.Module):
     """Chat ToThosT"""
 
     strings = {"name": "ToThosT"}
