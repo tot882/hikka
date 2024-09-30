@@ -26,7 +26,7 @@ class HikkaInfoMod(loader.Module):
             ),
             loader.ConfigValue(
                 "custom_button",
-                ["🌘 Support chat", "https://t.me/hikka_talks"],
+                None,
                 lambda: self.strings("_cfg_cst_btn"),
                 validator=loader.validators.Union(
                     loader.validators.Series(fixed_len=2),
@@ -62,10 +62,10 @@ class HikkaInfoMod(loader.Module):
         platform = utils.get_named_platform()
 
         for emoji, icon in [
-            ("🍆", "<emoji document_id=5346156903858710186>🍆</emoji>")
+            ("🍆 ToThosT", "<emoji document_id=5346156903858710186>🍆</emoji> ToThosT")
         ]:
-            platform = platform.replace(emoji, icon)
-
+            platform = platform.replace(emoji, icon if not self._client.hikka_me.premium else '<emoji document_id=5253874021061118203>🍆</emoji><emoji document_id=5255971528469662704>🍆</emoji><emoji document_id=5255982609485283509>🍆</emoji><emoji document_id=5253803983029422224>🍆</emoji>')
+        
         return (
             (
                 "<b>🌘 Hikka</b>\n"
