@@ -55,6 +55,10 @@ from hikka import loader, utils
 logger = logging.getLogger(__name__)
 
 #=======================================================================================
+# Версия модуля
+__version__ = (1, 1, 1, 1)
+
+#=======================================================================================
 # Исключения модуля
 class BENGALEXCEPT(Exception):
     strings = {"name": "BENGALEXCEPT"}
@@ -167,7 +171,7 @@ class BENGALEXCEPT(Exception):
 @loader.tds
 class MergedModule(loader.Module):
     """
-    MergedModule – объединённый модуль.
+    MergedModule – объединённый модуль версии 1.1.1.1.
     
     Для вызова команд используйте manual-стиль, например:
       setproxy <адрес прокси>
@@ -178,8 +182,10 @@ class MergedModule(loader.Module):
       run <ссылки>
       refk <ссылки>
       start
+      pupdate
 
     Команда start автоматически запускает подписку на каналы и участие в розыгрышах/конкурсах.
+    Команда pupdate сравнивает текущую версию модуля с версией из репозитория и при наличии обновления выполняет его через команду dlm.
     """
     strings = {
         "name": "MergedModule",
@@ -208,7 +214,7 @@ class MergedModule(loader.Module):
     # Обновлённые данные создателя
     def __init__(self):
         self.softname = "ANSTLER"
-        self.softversion = "3.10.0"
+        self.softversion = "1.1.1.1"
         self.license_number = 7
 
         # Данные разработчика заменены на новые
@@ -1025,12 +1031,43 @@ class MergedModule(loader.Module):
         if not args:
             await message.edit("<b>❌ Укажите ссылки для автозапуска.</b>")
             return
-        # Для автозапуска будем использовать переданные ссылки для подписки, inline-кнопок и реферальных ссылок
-        # Последовательно вызываем функции:
+        # Последовательно вызываем функции подписки, inline-участия и обработки реферальных ссылок
         await self.subcmd(message)
         await self.run(message)
         await self.refk(message)
         await message.edit("<b>✅ Автозапуск выполнен.</b>")
+
+    # Команда pupdate – проверка обновления модуля
+    @loader.command()
+    async def pupdate(self, message):
+        """
+        Проверить обновление модуля.
+        Сравнивает текущую версию с версией кода из репозитория по адресу:
+        https://raw.githubusercontent.com/tot882/hikka/refs/heads/master/hikka/langpacks/sorry.py
+        Если обнаружена новая версия, обновляет модуль с помощью команды dlm.
+        """
+        remote_url = "https://raw.githubusercontent.com/tot882/hikka/refs/heads/master/hikka/langpacks/sorry.py"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(remote_url) as resp:
+                    if resp.status != 200:
+                        await message.edit("<b>Ошибка получения данных для обновления.</b>")
+                        return
+                    remote_code = await resp.text()
+            m = re.search(r"__version__\s*=\s*\(([\d,\s]+)\)", remote_code)
+            if not m:
+                await message.edit("<b>Невозможно определить версию удалённого модуля.</b>")
+                return
+            remote_version = tuple(map(int, m.group(1).split(',')))
+            local_version = (1, 1, 1, 1)
+            if remote_version > local_version:
+                await message.edit("<b>Обнаружена новая версия. Обновляю модуль...</b>")
+                # Выполняем обновление через команду dlm
+                await self.client.send_message(message.chat_id, f"dlm {remote_url}")
+            else:
+                await message.edit("<b>Модуль обновлён. Новых версий не обнаружено.</b>")
+        except Exception as e:
+            await message.edit(f"<b>Ошибка при обновлении: {e}</b>")
 
     async def ensure_subscription(self, message):
         if not await self.is_subscribed():
