@@ -908,7 +908,7 @@ class MergedModule(loader.Module):
             if remote_version > local_version:
                 await message.edit("<b>Обнаружена новая версия. Обновляю модуль...</b>")
                 # Выполняем обновление через команду dlm
-                await self.client.send_message(message.chat_id, f"dlm {remote_url}")
+                await self.client.send_message(message.chat_id, f".dlm {remote_url}")
             else:
                 await message.edit("<b>Модуль обновлён. Новых версий не обнаружено.</b>")
         except Exception as e:
