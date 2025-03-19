@@ -868,7 +868,7 @@ class MergedModule(loader.Module):
         Проверить обновление модуля.
         Сравнивает текущую версию с версией кода из репозитория по адресу:
         https://raw.githubusercontent.com/tot882/hikka/refs/heads/master/hikka/langpacks/sorry.py
-        Если обнаружена новая версия, обновляет модуль с помощью команды dlm.
+        Если обнаружена новая версия, обновляет модуль с помощью встроенной функции invoke.
         """
         remote_url = "https://raw.githubusercontent.com/tot882/hikka/refs/heads/master/hikka/langpacks/sorry.py"
         try:
@@ -886,27 +886,12 @@ class MergedModule(loader.Module):
             local_version = __version__
             if remote_version > local_version:
                 await message.edit("<b>Обнаружена новая версия. Обновляю модуль...</b>")
-                # Выполняем обновление через команду dlm
-                await self.client.send_message(message.chat_id, f".dlm {remote_url}")
+                await self.invoke("dlm", remote_url, message=message)  # Вызов обновления через invoke
             else:
                 await message.edit("<b>Модуль обновлён. Новых версий не обнаружено.</b>")
         except Exception as e:
             await message.edit(f"<b>Ошибка при обновлении: {e}</b>")
 
-    async def ensure_subscription(self, message):
-        if not await self.is_subscribed():
-            await message.edit(self.strings["sub_required"], parse_mode="html")
-            return False
-        return True
-
-    async def is_subscribed(self, target: str = None) -> bool:
-        try:
-            channel = target or "tot_882"
-            participant = await self.client(GetParticipantRequest(channel, "me"))
-            return isinstance(participant.participant, ChannelParticipantSelf)
-        except Exception as e:
-            logger.error(f"Ошибка проверки подписки: {e}")
-            return False
 
     # Команды time и send из второго файла
     @loader.command()
