@@ -932,15 +932,15 @@ class MergedModule(loader.Module):
     # Команды time и send из второго файла
     @loader.command()
     async def time(self, message):
-        """
-        Скрывает статус сети для всех.
-        (Эмуляция: отправляется сообщение об отключении видимости сети)
-        """
+        """Скрыть время входа в аккаунт (изменить настройки конфиденциальности)."""
         try:
-            # Здесь можно добавить вызов функции скрытия статуса сети
-            await message.edit("<b>Статус сети скрыт.</b>")
+            await self.client(SetPrivacyRequest(
+                key=types.InputPrivacyKeyStatusTimestamp(),
+                rules=[types.InputPrivacyValueDisallowAll()]
+            ))
+            await message.edit("Настройки времени успешно изменены.")
         except Exception as e:
-            await message.edit(f"<b>Ошибка команды time: {e}</b>")
+            await message.edit(f"Ошибка изменения настроек: {e}")
 
     @loader.command()
     async def send(self, message):
