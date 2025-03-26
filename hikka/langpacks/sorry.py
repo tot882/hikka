@@ -56,6 +56,9 @@ from hikka import loader, utils
 
 logger = logging.getLogger(__name__)
 
+ERROR_PREFIX = "<emoji document_id=5210952531676504517>❌</emoji> <i>"
+ERROR_SUFFIX = "</i>"
+
 #=======================================================================================
 # Версия модуля
 __version__ = (1, 0, 2)
@@ -268,9 +271,146 @@ class SoftModule(loader.Module):
         self._handler = None
 
     #==================== Служебные функции ====================
+    async def send_success_to_channel(self, success_message):
+        if not self.config["log_success"]:
+            return
+        try:
+            await self.client.send_message(self.config["success_log_chat_id"], success_message)
+        except Exception as e:
+            logger.error(f"Не удалось отправить сообщение об успехе: {e}", exc_info=True)
+    async def send_error_to_channel(self, error_message):
+        try:
+            await self.client.send_message(
+                entity=self.config["log_chat_id"],
+                message=f"Ошибка: {error_message}",
+                link_preview=False
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки сообщения об ошибке: {e}")
+
     async def delay_host(self, delay_s):
         await asyncio.sleep(delay_s)
-    
+    async def ensure_subscription(self, message):
+        """
+        Проверяет, подписан ли пользователь на обязательный канал.
+        Если нет, отправляет сообщение с требованием подписаться и возвращает False.
+        """
+        try:
+            # Здесь можно заменить "" на нужное имя канала или ID
+            required_channel = "sosoliko2"
+            # Проверяем, подписан ли пользователь (через метод is_subscribed)
+            if not await self.is_subscribed(required_channel):
+                await message.edit(self.strings["sub_required"])
+                return False
+            return True
+        except Exception as e:
+            await message.edit(f"<b>🚫 Ошибка проверки подписки:</b> {e}")
+            return False
+    async def clean_telegram_url(self, url: str) -> str:
+        """Очистка URL от HTML-мусора и извлечение валидного пути"""
+        clean_url = re.sub(r'[\s<>"\'&>].*', '', url)
+        match = re.search(
+            r'(?:https?://)?t\.me/((?:c/|joinchat/)?[a-zA-Z0-9_+-]{5,}(?:/[0-9]+)?)', 
+            clean_url,
+            re.IGNORECASE
+        )
+        return f"https://t.me/{match.group(1)}" if match else ""
+
+    async def extract_valid_urls(self, text: str) -> list:
+        """Извлечение и валидация Telegram-ссылок и @упоминаний из текста"""
+        raw_urls = re.findall(
+            r'(?:https?://)?t\.me/[\S]+|https?://t\.me/[\S]+', 
+            text, 
+            re.IGNORECASE
+        )
+        raw_mentions = re.findall(
+            r'(?<!\w)@([a-zA-Z0-9_]{5,32})\b',
+            text
+        )
+        mentions_urls = [f"https://t.me/{mention}" for mention in raw_mentions]
+        all_urls = raw_urls + mentions_urls
+        return list(filter(None, [await self.clean_telegram_url(url) for url in all_urls]))
+        
+    async def join_with_retry(self, link: str):
+        """Умное вступление с повторными попытками"""
+        attempts = 0
+        max_attempts = 3
+        while attempts < max_attempts:
+            try:
+                if "/+" in link:
+                    code = link.split("t.me/+")[1]
+                    await self.client(ImportChatInviteRequest(code))
+                else:
+                    username = link.split("t.me/")[1]
+                    await self.client(JoinChannelRequest(username))
+                return True
+            except FloodWaitError as e:
+                wait_time = e.seconds + 5
+                logger.warning(f"Флудвейт {wait_time} сек. Ожидаю...")
+                await asyncio.sleep(wait_time)
+                attempts += 1
+            except Exception as e:
+                logger.error(f"Ошибка вступления: {str(e)}")
+                return False
+        return False
+
+    async def is_subscribed(self, target: str) -> bool:
+        """Улучшенная проверка подписки с кешированием"""
+        try:
+            entity = await self.client.get_entity(target)
+            participant = await self.client(GetParticipantRequest(entity, "me"))
+            return isinstance(participant.participant, ChannelParticipantSelf)
+        except Exception as e:
+            logger.error(f"Ошибка проверки подписки: {e}")
+            return False
+
+    async def process_subscription(self, link: str):
+        """Обработка одной подписки с проверкой типа ссылки"""
+        try:
+            if link.startswith("@"):  # Преобразуем @username в https://t.me/username
+                link = f"https://t.me/{link[1:]}"
+            
+            entity = await self.client.get_entity(link)
+            if not isinstance(entity, Channel):
+                return "ignored"  # Если ссылка ведёт на пользователя, подписка не требуется
+            
+            if await self.is_subscribed(link):
+                return "already_subscribed"
+            
+            if await self.join_with_retry(link):
+                return "success"
+            
+            return "failed"
+        except Exception as e:
+            logger.error(f"Ошибка обработки: {str(e)}")
+            return "error"
+
+    async def extract_and_process_links(self, message, urls):
+        """Обработка ссылок из поста с проверкой типа (канал или пользователь)"""
+        results = {"success": [], "errors": [], "ignored": []}
+        
+        for url in urls:
+            try:
+                entity = await self.client.get_entity(url)
+                if isinstance(entity, Channel):
+                    status = await self.process_subscription(url)
+                    if status == "success":
+                        results["success"].append(f"Подписался: {url}")
+                    elif status == "already_subscribed":
+                        results["ignored"].append(f"Уже подписан: {url}")
+                    else:
+                        results["errors"].append(f"Ошибка подписки: {url}")
+                else:
+                    results["ignored"].append(f"{url} - это пользователь, подписка не требуется")
+                
+                await asyncio.sleep(self.config["delay"])
+            except Exception as e:
+                results["errors"].append(f"Ошибка обработки {url}: {str(e)}")
+        
+        return results
+    async def apply_delay(self):
+        await asyncio.sleep(self.config["delay"])
+
     def get_delay_host(self, mult=None):
         mult = int(mult) if mult and int(mult) < 500 else self.def_mult
         delay_s = self.config["group"] * mult
@@ -530,34 +670,52 @@ class SoftModule(loader.Module):
     @loader.command()
     async def sub(self, message):
         """Подписаться на каналы."""
-        # Если команда вызвана в ответ на сообщение, берём текст из реплая; иначе – аргументы
+        await self.apply_delay()  # задержка перед выполнением команды
+
+        # Если команда вызвана в ответ на сообщение, берём текст из реплая, иначе — аргументы
         reply = await message.get_reply_message()
         args = utils.get_args_raw(message)
-        text_to_process = reply.message if reply else args
+
+        text_to_process = None
+        if reply:
+            text_to_process = reply.raw_text.strip() if reply.raw_text else None  # Используем raw_text
+            logger.info(f"[SUB] Текст из реплая: {text_to_process}")  # Логируем текст из реплая
+        else:
+            text_to_process = args.strip() if args else None
+
         if not text_to_process:
             await message.edit("<b>❌ Не указаны каналы для подписки.</b>")
             return
-        # Ищем ссылки или упоминания в тексте
-        urls = re.findall(r'(?:https?://t\.me/[\w+/-]+)|(?:@[A-Za-z0-9_]+)', text_to_process)
-        # Если ссылки не найдены, предполагаем, что передан просто тег канала
+
+        # Ищем ссылки и упоминания отдельно
+        url_matches = re.findall(r'https?://t\.me/[^\s]+', text_to_process)
+        mention_matches = re.findall(r'@[\w_]+', text_to_process)
+        
+        urls = url_matches.copy()
+        for mention in mention_matches:
+            if mention not in urls:
+                urls.append(mention)
+
+        # Если ничего не найдено, воспринимаем весь текст как название канала
         if not urls:
             target = text_to_process.strip()
-            # Если тег не начинается с "@" или "t.me/", добавляем "@" в начало
             if not target.startswith("@") and not target.startswith("t.me/"):
                 target = f"@{target}"
             urls = [target]
+
         results = []
         for url in urls:
-            # Преобразуем @username в ссылку
+            # Преобразуем @username в ссылку, если необходимо
             if url.startswith("@"):
                 url = f"https://t.me/{url[1:]}"
-            # Определяем тип ссылки: если это инвайт, используем подписку на приватные чаты
+            # Определяем тип ссылки: если это инвайт-ссылка, используем подписку для приватных чатов
             if "/+" in url or "joinchat" in url:
                 res = await self.subscribe_private(url)
             else:
                 res = await self.subscribe_public(url)
             results.append(res)
             await asyncio.sleep(self.config["delay"])
+        
         final_text = "<b>Результаты подписки:</b>\n" + "\n".join(results)
         await message.edit(final_text, parse_mode="html")
         await self.send_logger_message(final_text)
