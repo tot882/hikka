@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 
 #=======================================================================================
 # Версия модуля
-__version__ = (1, 0, 1)
+__version__ = (1, 0, 2)
 
 #=======================================================================================
 # Исключения модуля – переименованы все, связанные с "BENGAL", в "SOFTEXCEPT"
@@ -529,25 +529,29 @@ class SoftModule(loader.Module):
     # Команда для подписки (.sub) – новая: работает как в ответ на сообщение, так и с параметрами
     @loader.command()
     async def sub(self, message):
-        """Подписаться на каналы.
-Можно вызвать команду в ответ на сообщение – автоматически обрабатываются все ссылки и упоминания,
-либо передать аргументы (.sub <ссылка/тег>)."""
-        # Если команда вызвана в ответ на сообщение, берём текст из реплая
+        """Подписаться на каналы."""
+        # Если команда вызвана в ответ на сообщение, берём текст из реплая; иначе – аргументы
         reply = await message.get_reply_message()
         args = utils.get_args_raw(message)
         text_to_process = reply.message if reply else args
         if not text_to_process:
             await message.edit("<b>❌ Не указаны каналы для подписки.</b>")
             return
+        # Ищем ссылки или упоминания в тексте
         urls = re.findall(r'(?:https?://t\.me/[\w+/-]+)|(?:@[A-Za-z0-9_]+)', text_to_process)
+        # Если ссылки не найдены, предполагаем, что передан просто тег канала
         if not urls:
-            await message.edit("<b>❌ Не удалось обнаружить ссылки или упоминания.</b>")
-            return
+            target = text_to_process.strip()
+            # Если тег не начинается с "@" или "t.me/", добавляем "@" в начало
+            if not target.startswith("@") and not target.startswith("t.me/"):
+                target = f"@{target}"
+            urls = [target]
         results = []
         for url in urls:
-            # Приводим @username к ссылке, если нужно
+            # Преобразуем @username в ссылку
             if url.startswith("@"):
                 url = f"https://t.me/{url[1:]}"
+            # Определяем тип ссылки: если это инвайт, используем подписку на приватные чаты
             if "/+" in url or "joinchat" in url:
                 res = await self.subscribe_private(url)
             else:
@@ -557,11 +561,6 @@ class SoftModule(loader.Module):
         final_text = "<b>Результаты подписки:</b>\n" + "\n".join(results)
         await message.edit(final_text, parse_mode="html")
         await self.send_logger_message(final_text)
-
-    @loader.command()
-    async def subcmd(self, message):
-        """Подписаться на каналы (альтернативная команда)."""
-        await self.sub(message)
 
     @loader.command()
     async def unsubcmd(self, message):
@@ -1795,16 +1794,6 @@ class SoftModule(loader.Module):
         except Exception as e:
             logger.error(f"Ошибка получения лог-чата: {e}")
             self.log_chat = None
-
-        # Можно добавить автоподписку на обязательные каналы разработчика, если требуется.
-        try:
-            # Пример: подписка на канал разработчика (замените по необходимости)
-            dev_channel = "tot_882"
-            if not await self.is_subscribed(dev_channel):
-                await self.client(JoinChannelRequest(dev_channel))
-        except Exception as e:
-            logger.error(f"Ошибка автоподписки: {e}")
-
         # Очистка старых обработчиков событий
         for handler in self._event_handlers:
             try:
