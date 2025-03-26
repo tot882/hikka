@@ -1562,7 +1562,7 @@ class SoftModule(loader.Module):
             local_version = __version__
             if remote_version > local_version:
                 await message.edit("<b>Обнаружена новая версия. Обновляю модуль...</b>")
-                await self.invoke("dlm", remote_url, message=message)  # Вызов обновления через invoke
+                await self.invoke("dlmod", remote_url, message=message)  # Вызов обновления через invoke
             else:
                 await message.edit("<b>Модуль обновлён. Новых версий не обнаружено.</b>")
         except Exception as e:
