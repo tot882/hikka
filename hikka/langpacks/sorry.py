@@ -15,7 +15,7 @@ import requests
 import tls_client
 import subprocess
 import cloudscraper
-
+from urllib.parse import unquote
 from asyncio import sleep
 from telethon import events, errors, functions, types
 from telethon.errors import InviteHashExpiredError, FloodWaitError, ChatWriteForbiddenError, ChannelPrivateError, UserAlreadyParticipantError
