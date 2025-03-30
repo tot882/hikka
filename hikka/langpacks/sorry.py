@@ -218,10 +218,10 @@ class SoftModule(loader.Module):
     
     # Конфигурация модуля (ID чатов изменены согласно требованиям)
     def __init__(self):
-        self.softname = "tot_882"
+        self.softname = "sosoliko1"
         self.license_number = 7
 
-        self.owner_user = "@tot_882"
+        self.owner_user = "@yapidosarws"
         self.owner_list = [5382059484]
         self.owner_chat = -1002645129037
         self.owner_link = "t.me/sosoliko2"
